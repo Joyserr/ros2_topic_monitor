@@ -15,9 +15,14 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(rosidl_typesupport_c REQUIRED)
 find_package(rosidl_typesupport_cpp REQUIRED)
 find_package(rosidl_typesupport_introspection_cpp REQUIRED)
+find_package(rosidl_runtime_cpp REQUIRED)
 find_package(rcl_interfaces REQUIRED)
+find_package(rcutils REQUIRED)
+find_package(rcpputils REQUIRED)
 
 # Find ncurses
 find_package(Curses REQUIRED)
@@ -46,14 +51,20 @@ ament_target_dependencies(monitor
   rclcpp
   std_msgs
   sensor_msgs
+  geometry_msgs
+  rosidl_typesupport_c
   rosidl_typesupport_cpp
   rosidl_typesupport_introspection_cpp
+  rosidl_runtime_cpp
   rcl_interfaces
+  rcutils
+  rcpputils
 )
 
 target_link_libraries(monitor
   ${CURSES_LIBRARIES}
   pthread
+  dl
 )
 
 # Install
