@@ -101,9 +101,12 @@ void uiThread(std::shared_ptr<TopicMonitorNode> node)
   while (g_running.load()) {
     if (!in_detail_view) {
       // Main view
-      auto topics = node->getDiscovery()->getTopicList();
+      auto all_topics = node->getDiscovery()->getTopicList();
       auto & subscribers = node->getSubscribers();
       auto discovery = node->getDiscovery();
+      
+      // Get filtered topics
+      auto topics = ui_main.getFilteredTopics(all_topics);
       
       // Clamp selected index
       if (!topics.empty()) {
@@ -111,39 +114,111 @@ void uiThread(std::shared_ptr<TopicMonitorNode> node)
           static_cast<int>(topics.size()) - 1));
       }
       
+      // Ensure page_offset is valid
+      int max_rows, max_cols;
+      getmaxyx(stdscr, max_rows, max_cols);
+      int max_visible = max_rows - 6;
+      int page_offset = ui_main.getPageOffset();
+      
+      // Auto-scroll to keep selected item visible
+      if (selected_index < page_offset) {
+        ui_main.setPageOffset(selected_index);
+      } else if (selected_index >= page_offset + max_visible) {
+        ui_main.setPageOffset(selected_index - max_visible + 1);
+      }
+      
       ui_main.render(topics, subscribers, discovery, selected_index);
       
       int ch = ui_main.getInput();
       
-      switch (ch) {
-        case KEY_UP:
-          selected_index = std::max(0, selected_index - 1);
-          break;
-        case KEY_DOWN:
-          selected_index = std::min(static_cast<int>(topics.size()) - 1, 
-            selected_index + 1);
-          break;
-        case 10:  // Enter
-        case KEY_ENTER:
-          if (!topics.empty() && selected_index < static_cast<int>(topics.size())) {
-            selected_topic = topics[selected_index];
-            in_detail_view = true;
-            
-            // Enable detail mode for selected topic
-            auto it = subscribers.find(selected_topic);
-            if (it != subscribers.end()) {
-              it->second->enableDetailMode();
+      if (ui_main.isSearchMode()) {
+        // Handle search mode input
+        switch (ch) {
+          case 27:  // ESC
+            ui_main.exitSearchMode();
+            selected_index = 0;
+            break;
+          case 10:  // Enter - Enter detail view for selected topic
+          case KEY_ENTER:
+            if (!topics.empty() && selected_index < static_cast<int>(topics.size())) {
+              selected_topic = topics[selected_index];
+              ui_main.exitSearchMode();  // Exit search mode
+              in_detail_view = true;  // Enter detail view
+              
+              // Enable detail mode for selected topic
+              auto it = subscribers.find(selected_topic);
+              if (it != subscribers.end()) {
+                it->second->enableDetailMode();
+              }
+            } else {
+              // If no topic selected, just exit search mode
+              ui_main.exitSearchMode();
             }
-          }
-          break;
-        case 'q':
-        case 'Q':
-          g_running.store(false);
-          break;
-        case 'r':
-        case 'R':
-          node->getDiscovery()->refreshTopics();
-          break;
+            break;
+          case KEY_BACKSPACE:
+          case 127:
+          case 8:
+            if (!ui_main.getSearchQuery().empty()) {
+              std::string query = ui_main.getSearchQuery();
+              query.pop_back();
+              ui_main.setSearchQuery(query);
+              selected_index = 0;  // Reset selection
+            }
+            break;
+          default:
+            if (ch >= 32 && ch <= 126) {  // Printable characters
+              std::string query = ui_main.getSearchQuery() + static_cast<char>(ch);
+              ui_main.setSearchQuery(query);
+              selected_index = 0;  // Reset selection
+            }
+            break;
+        }
+      } else {
+        // Handle normal navigation
+        switch (ch) {
+          case KEY_UP:
+            selected_index = std::max(0, selected_index - 1);
+            break;
+          case KEY_DOWN:
+            selected_index = std::min(static_cast<int>(topics.size()) - 1, 
+              selected_index + 1);
+            break;
+          case KEY_PPAGE:  // Page Up
+            selected_index = std::max(0, selected_index - max_visible);
+            ui_main.setPageOffset(std::max(0, page_offset - max_visible));
+            break;
+          case KEY_NPAGE:  // Page Down
+            selected_index = std::min(static_cast<int>(topics.size()) - 1, 
+              selected_index + max_visible);
+            ui_main.setPageOffset(std::min(static_cast<int>(topics.size()) - max_visible, 
+              page_offset + max_visible));
+            break;
+          case '/':  // Enter search mode
+            ui_main.enterSearchMode();
+            selected_index = 0;
+            break;
+          case 10:  // Enter
+          case KEY_ENTER:
+            if (!topics.empty() && selected_index < static_cast<int>(topics.size())) {
+              selected_topic = topics[selected_index];
+              in_detail_view = true;
+              
+              // Enable detail mode for selected topic
+              auto it = subscribers.find(selected_topic);
+              if (it != subscribers.end()) {
+                it->second->enableDetailMode();
+              }
+            }
+            break;
+          case 'q':
+          case 'Q':
+            g_running.store(false);
+            break;
+          case 'r':
+          case 'R':
+            node->getDiscovery()->refreshTopics();
+            break;
+        }
       }
     } else {
       // Detail view

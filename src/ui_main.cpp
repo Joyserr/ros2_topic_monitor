@@ -2,12 +2,13 @@
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
+#include <cctype>
 
 namespace ros2_topic_monitor
 {
 
 UIMain::UIMain()
-: max_rows_(0), max_cols_(0)
+: max_rows_(0), max_cols_(0), search_mode_(false), search_query_(""), page_offset_(0)
 {
 }
 
@@ -51,8 +52,16 @@ void UIMain::render(
 {
   clear();
   
+  // Get filtered topics based on search
+  auto filtered_topics = getFilteredTopics(topics);
+  
   drawHeader();
-  drawTopicList(topics, subscribers, discovery, selected_index);
+  drawTopicList(filtered_topics, subscribers, discovery, selected_index);
+  
+  // Calculate pagination info
+  int max_visible = max_rows_ - 6;
+  int total_pages = (filtered_topics.size() + max_visible - 1) / max_visible;
+  int current_page = (page_offset_ / max_visible) + 1;
   
   // Draw footer
   attron(COLOR_PAIR(5));
@@ -60,8 +69,29 @@ void UIMain::render(
   for (int i = 0; i < max_cols_; i++) {
     addch(' ');
   }
-  mvprintw(max_rows_ - 1, 2, "[↑/↓] Navigate  [ENTER] Details  [Q] Quit  [R] Refresh");
+  
+  if (search_mode_) {
+    mvprintw(max_rows_ - 1, 2, "[ESC] Exit Search  [ENTER] Confirm");
+  } else {
+    std::ostringstream footer;
+    footer << "[↑/↓] Navigate  [PgUp/PgDn] Page  [ENTER] Details  [/] Search  [Q] Quit";
+    mvprintw(max_rows_ - 1, 2, "%s", footer.str().c_str());
+    
+    // Show pagination info on the right
+    if (total_pages > 1) {
+      std::ostringstream page_info;
+      page_info << "Page " << current_page << "/" << total_pages 
+                << " (" << filtered_topics.size() << " topics)";
+      mvprintw(max_rows_ - 1, max_cols_ - page_info.str().length() - 2, 
+               "%s", page_info.str().c_str());
+    }
+  }
   attroff(COLOR_PAIR(5));
+  
+  // Draw search bar if in search mode
+  if (search_mode_) {
+    drawSearchBar();
+  }
   
   refresh();
 }
@@ -99,9 +129,13 @@ void UIMain::drawTopicList(
   int start_row = 4;
   int max_visible = max_rows_ - 6;  // Leave room for header and footer
   
-  for (size_t i = 0; i < topics.size() && i < static_cast<size_t>(max_visible); i++) {
+  // Calculate visible range based on page_offset
+  size_t display_start = page_offset_;
+  size_t display_end = std::min(display_start + max_visible, topics.size());
+  
+  for (size_t i = display_start; i < display_end; i++) {
     const auto & topic = topics[i];
-    int row = start_row + i;
+    int row = start_row + (i - display_start);
     
     // Highlight selected row
     if (static_cast<int>(i) == selected_index) {
@@ -156,13 +190,6 @@ void UIMain::drawTopicList(
       attroff(A_REVERSE);
     }
   }
-  
-  // Show scroll indicator if needed
-  if (topics.size() > static_cast<size_t>(max_visible)) {
-    mvprintw(max_rows_ - 2, max_cols_ - 20, "(%zu/%zu topics)", 
-      std::min(static_cast<size_t>(selected_index + 1), topics.size()), 
-      topics.size());
-  }
 }
 
 std::string UIMain::formatBytes(double bytes) const
@@ -185,6 +212,57 @@ std::string UIMain::formatDelay(double delay_ms) const
   std::ostringstream oss;
   oss << std::fixed << std::setprecision(1) << delay_ms;
   return oss.str();
+}
+
+void UIMain::enterSearchMode()
+{
+  search_mode_ = true;
+  search_query_.clear();
+  curs_set(1);  // Show cursor
+}
+
+void UIMain::exitSearchMode()
+{
+  search_mode_ = false;
+  search_query_.clear();
+  curs_set(0);  // Hide cursor
+  page_offset_ = 0;  // Reset pagination when exiting search
+}
+
+std::vector<std::string> UIMain::getFilteredTopics(
+  const std::vector<std::string> & topics) const
+{
+  if (search_query_.empty()) {
+    return topics;
+  }
+  
+  std::vector<std::string> filtered;
+  std::string query_lower = search_query_;
+  std::transform(query_lower.begin(), query_lower.end(), query_lower.begin(),
+    [](unsigned char c) { return std::tolower(c); });
+  
+  for (const auto & topic : topics) {
+    std::string topic_lower = topic;
+    std::transform(topic_lower.begin(), topic_lower.end(), topic_lower.begin(),
+      [](unsigned char c) { return std::tolower(c); });
+    
+    if (topic_lower.find(query_lower) != std::string::npos) {
+      filtered.push_back(topic);
+    }
+  }
+  
+  return filtered;
+}
+
+void UIMain::drawSearchBar()
+{
+  // Draw search bar at the top
+  attron(COLOR_PAIR(3) | A_BOLD);
+  mvprintw(1, 2, "Search: %s", search_query_.c_str());
+  attroff(COLOR_PAIR(3) | A_BOLD);
+  
+  // Position cursor at end of search query
+  move(1, 10 + search_query_.length());
 }
 
 }  // namespace ros2_topic_monitor

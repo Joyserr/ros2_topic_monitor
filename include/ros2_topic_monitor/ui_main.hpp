@@ -33,6 +33,20 @@ public:
 
   // Get user input (non-blocking)
   int getInput();
+  
+  // Handle search mode
+  bool isSearchMode() const { return search_mode_; }
+  void enterSearchMode();
+  void exitSearchMode();
+  const std::string & getSearchQuery() const { return search_query_; }
+  void setSearchQuery(const std::string & query) { search_query_ = query; }
+  
+  // Get filtered topics based on search
+  std::vector<std::string> getFilteredTopics(const std::vector<std::string> & topics) const;
+  
+  // Page navigation
+  int getPageOffset() const { return page_offset_; }
+  void setPageOffset(int offset) { page_offset_ = offset; }
 
 private:
   void drawHeader();
@@ -45,8 +59,17 @@ private:
   std::string formatBytes(double bytes) const;
   std::string formatDelay(double delay_ms) const;
   
+  void drawSearchBar();
+  
   int max_rows_;
   int max_cols_;
+  
+  // Search state
+  bool search_mode_;
+  std::string search_query_;
+  
+  // Pagination state
+  int page_offset_;  // Starting index for current page
 };
 
 }  // namespace ros2_topic_monitor
