@@ -46,12 +46,13 @@ void UIMain::cleanup()
 void UIMain::render(
   const std::vector<std::string> & topics,
   const std::unordered_map<std::string, std::shared_ptr<LazySubscriber>> & subscribers,
+  std::shared_ptr<TopicDiscovery> discovery,
   int selected_index)
 {
   clear();
   
   drawHeader();
-  drawTopicList(topics, subscribers, selected_index);
+  drawTopicList(topics, subscribers, discovery, selected_index);
   
   // Draw footer
   attron(COLOR_PAIR(5));
@@ -92,6 +93,7 @@ void UIMain::drawHeader()
 void UIMain::drawTopicList(
   const std::vector<std::string> & topics,
   const std::unordered_map<std::string, std::shared_ptr<LazySubscriber>> & subscribers,
+  std::shared_ptr<TopicDiscovery> discovery,
   int selected_index)
 {
   int start_row = 4;
@@ -121,8 +123,20 @@ void UIMain::drawTopicList(
         topic_display = topic_display.substr(0, 35) + "...";
       }
       
-      // Get topic type (simplified - would need to get from discovery)
+      // Get topic type from discovery
       std::string type_display = "unknown";
+      if (discovery) {
+        auto topic_info = discovery->getTopicInfo(topic);
+        if (!topic_info.type.empty()) {
+          type_display = topic_info.type;
+          // Simplify type name (remove package prefix if too long)
+          size_t last_slash = type_display.find_last_of('/');
+          if (last_slash != std::string::npos && type_display.length() > 28) {
+            type_display = type_display.substr(last_slash + 1);
+          }
+        }
+      }
+      
       if (type_display.length() > 28) {
         type_display = type_display.substr(0, 25) + "...";
       }

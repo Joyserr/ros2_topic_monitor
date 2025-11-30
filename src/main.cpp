@@ -103,6 +103,7 @@ void uiThread(std::shared_ptr<TopicMonitorNode> node)
       // Main view
       auto topics = node->getDiscovery()->getTopicList();
       auto & subscribers = node->getSubscribers();
+      auto discovery = node->getDiscovery();
       
       // Clamp selected index
       if (!topics.empty()) {
@@ -110,7 +111,7 @@ void uiThread(std::shared_ptr<TopicMonitorNode> node)
           static_cast<int>(topics.size()) - 1));
       }
       
-      ui_main.render(topics, subscribers, selected_index);
+      ui_main.render(topics, subscribers, discovery, selected_index);
       
       int ch = ui_main.getInput();
       

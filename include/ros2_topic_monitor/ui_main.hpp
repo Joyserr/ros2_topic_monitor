@@ -28,6 +28,7 @@ public:
   void render(
     const std::vector<std::string> & topics,
     const std::unordered_map<std::string, std::shared_ptr<LazySubscriber>> & subscribers,
+    std::shared_ptr<TopicDiscovery> discovery,
     int selected_index);
 
   // Get user input (non-blocking)
@@ -38,6 +39,7 @@ private:
   void drawTopicList(
     const std::vector<std::string> & topics,
     const std::unordered_map<std::string, std::shared_ptr<LazySubscriber>> & subscribers,
+    std::shared_ptr<TopicDiscovery> discovery,
     int selected_index);
   
   std::string formatBytes(double bytes) const;
