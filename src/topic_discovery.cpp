@@ -49,6 +49,88 @@ void TopicDiscovery::refreshTopics()
       auto sub_endpoints = node_->get_subscriptions_info_by_topic(topic_name);
       info.subscription_count = sub_endpoints.size();
       
+      // Get QoS profile from first publisher (if available)
+      if (!endpoints.empty()) {
+        const auto & qos = endpoints[0].qos_profile();
+        
+        // Reliability
+        switch (qos.reliability()) {
+          case rclcpp::ReliabilityPolicy::BestEffort:
+            info.qos_reliability = "BEST_EFFORT";
+            break;
+          case rclcpp::ReliabilityPolicy::Reliable:
+            info.qos_reliability = "RELIABLE";
+            break;
+          default:
+            info.qos_reliability = "UNKNOWN";
+        }
+        
+        // Durability
+        switch (qos.durability()) {
+          case rclcpp::DurabilityPolicy::Volatile:
+            info.qos_durability = "VOLATILE";
+            break;
+          case rclcpp::DurabilityPolicy::TransientLocal:
+            info.qos_durability = "TRANSIENT_LOCAL";
+            break;
+          default:
+            info.qos_durability = "UNKNOWN";
+        }
+        
+        // History
+        switch (qos.history()) {
+          case rclcpp::HistoryPolicy::KeepLast:
+            info.qos_history = "KEEP_LAST";
+            info.qos_depth = qos.depth();
+            break;
+          case rclcpp::HistoryPolicy::KeepAll:
+            info.qos_history = "KEEP_ALL";
+            break;
+          default:
+            info.qos_history = "UNKNOWN";
+        }
+      } else if (!sub_endpoints.empty()) {
+        // If no publishers, try to get QoS from first subscriber
+        const auto & qos = sub_endpoints[0].qos_profile();
+        
+        // Reliability
+        switch (qos.reliability()) {
+          case rclcpp::ReliabilityPolicy::BestEffort:
+            info.qos_reliability = "BEST_EFFORT";
+            break;
+          case rclcpp::ReliabilityPolicy::Reliable:
+            info.qos_reliability = "RELIABLE";
+            break;
+          default:
+            info.qos_reliability = "UNKNOWN";
+        }
+        
+        // Durability
+        switch (qos.durability()) {
+          case rclcpp::DurabilityPolicy::Volatile:
+            info.qos_durability = "VOLATILE";
+            break;
+          case rclcpp::DurabilityPolicy::TransientLocal:
+            info.qos_durability = "TRANSIENT_LOCAL";
+            break;
+          default:
+            info.qos_durability = "UNKNOWN";
+        }
+        
+        // History
+        switch (qos.history()) {
+          case rclcpp::HistoryPolicy::KeepLast:
+            info.qos_history = "KEEP_LAST";
+            info.qos_depth = qos.depth();
+            break;
+          case rclcpp::HistoryPolicy::KeepAll:
+            info.qos_history = "KEEP_ALL";
+            break;
+          default:
+            info.qos_history = "UNKNOWN";
+        }
+      }
+      
       topics_[topic_name] = info;
     }
   }

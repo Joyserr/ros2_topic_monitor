@@ -148,10 +148,11 @@ void uiThread(std::shared_ptr<TopicMonitorNode> node)
     } else {
       // Detail view
       auto & subscribers = node->getSubscribers();
+      auto discovery = node->getDiscovery();
       auto it = subscribers.find(selected_topic);
       
       if (it != subscribers.end()) {
-        ui_detail.render(selected_topic, it->second);
+        ui_detail.render(selected_topic, it->second, discovery);
       }
       
       int ch = ui_detail.getInput();

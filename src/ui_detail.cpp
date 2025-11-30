@@ -19,7 +19,8 @@ UIDetail::~UIDetail()
 
 void UIDetail::render(
   const std::string & topic_name,
-  std::shared_ptr<LazySubscriber> subscriber)
+  std::shared_ptr<LazySubscriber> subscriber,
+  std::shared_ptr<TopicDiscovery> discovery)
 {
   getmaxyx(stdscr, max_rows_, max_cols_);
   
@@ -31,6 +32,12 @@ void UIDetail::render(
     auto metrics = subscriber->getMetrics();
     drawMetrics(metrics);
     
+    // Draw QoS information
+    if (discovery) {
+      auto topic_info = discovery->getTopicInfo(topic_name);
+      drawQoS(topic_info);
+    }
+    
     // Update FPS history for sparkline
     double fps = metrics->getFPS();
     fps_history_.push_back(fps);
@@ -40,7 +47,10 @@ void UIDetail::render(
     
     // Draw FPS sparkline
     if (!fps_history_.empty()) {
-      drawSparkline(fps_history_, 8, 2, 50);
+      attron(A_BOLD);
+      mvprintw(13, 2, "FPS History:");
+      attroff(A_BOLD);
+      drawSparkline(fps_history_, 14, 4, 50);
     }
     
     // Draw message content
@@ -48,7 +58,7 @@ void UIDetail::render(
       std::string content = subscriber->getLastMessageContent();
       drawMessageContent(content);
     } else {
-      mvprintw(10, 2, "Detail mode not enabled. Press 'D' to enable message parsing.");
+      mvprintw(27, 2, "Detail mode not enabled. Press 'D' to enable message parsing.");
     }
   }
   
@@ -106,15 +116,40 @@ void UIDetail::drawMetrics(std::shared_ptr<MetricsManager> metrics)
   mvprintw(4, 4, "Delay:      %.2f ms", delay);
   mvprintw(5, 4, "Bandwidth:  %.2f B/s", bw);
   mvprintw(6, 4, "Count:      %lu messages", count);
+}
+
+void UIDetail::drawQoS(const TopicInfo & topic_info)
+{
+  if (topic_info.name.empty()) {
+    return;
+  }
   
   attron(A_BOLD);
-  mvprintw(8, 2, "FPS History:");
+  mvprintw(8, 2, "QoS Profile:");
   attroff(A_BOLD);
+  
+  // Clear the lines to avoid sparkline artifacts
+  move(9, 0);
+  clrtoeol();
+  mvprintw(9, 4, "Reliability: %s", topic_info.qos_reliability.c_str());
+  
+  move(10, 0);
+  clrtoeol();
+  mvprintw(10, 4, "Durability:  %s", topic_info.qos_durability.c_str());
+  
+  move(11, 0);
+  clrtoeol();
+  if (topic_info.qos_history == "KEEP_LAST") {
+    mvprintw(11, 4, "History:     %s (Depth: %d)", 
+      topic_info.qos_history.c_str(), topic_info.qos_depth);
+  } else {
+    mvprintw(11, 4, "History:     %s", topic_info.qos_history.c_str());
+  }
 }
 
 void UIDetail::drawMessageContent(const std::string & content)
 {
-  int start_row = 11;
+  int start_row = 27;
   
   attron(A_BOLD);
   mvprintw(start_row, 2, "Last Message:");
@@ -163,24 +198,39 @@ void UIDetail::drawSparkline(
     max_val = min_val + 1.0;
   }
   
-  // Sparkline characters (Unicode block elements would be better, but using ASCII)
-  const char* levels = " _.,-=+*#@";
-  int num_levels = 10;
+  // Draw a bar chart with 8 rows of height
+  const int chart_height = 8;
   
   size_t start_idx = data.size() > static_cast<size_t>(width) ? 
     data.size() - width : 0;
+  size_t data_count = std::min(data.size() - start_idx, static_cast<size_t>(width));
   
-  for (size_t i = start_idx; i < data.size() && 
-       static_cast<int>(i - start_idx) < width; i++) {
-    double normalized = (data[i] - min_val) / (max_val - min_val);
-    int level = static_cast<int>(normalized * (num_levels - 1));
-    level = std::max(0, std::min(num_levels - 1, level));
+  // Draw from top to bottom
+  for (int h = chart_height - 1; h >= 0; h--) {
+    move(row + (chart_height - 1 - h), col);
     
-    mvaddch(row, col + (i - start_idx), levels[level]);
+    for (size_t i = 0; i < data_count; i++) {
+      double value = data[start_idx + i];
+      double normalized = (value - min_val) / (max_val - min_val);
+      double threshold = static_cast<double>(h) / chart_height;
+      
+      if (normalized >= threshold) {
+        addch('|');  // Bar filled
+      } else {
+        addch(' ');  // Bar empty
+      }
+    }
+  }
+  
+  // Draw baseline
+  move(row + chart_height, col);
+  for (size_t i = 0; i < data_count; i++) {
+    addch('-');
   }
   
   // Show scale
-  mvprintw(row + 1, col, "Min: %.1f  Max: %.1f", min_val, max_val);
+  mvprintw(row + chart_height + 1, col, "Max: %.1f Hz", max_val);
+  mvprintw(row + chart_height + 2, col, "Min: %.1f Hz", min_val);
 }
 
 }  // namespace ros2_topic_monitor

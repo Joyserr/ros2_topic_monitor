@@ -18,6 +18,12 @@ struct TopicInfo
   size_t publisher_count{0};
   size_t subscription_count{0};
   bool active{true};
+  
+  // QoS profile information (from first publisher/subscriber)
+  std::string qos_reliability;
+  std::string qos_durability;
+  std::string qos_history;
+  int qos_depth{0};
 };
 
 class TopicDiscovery
