@@ -362,22 +362,218 @@ std::string MessageTypeLoader::parseArrayField(
   const rosidl_typesupport_introspection_cpp::MessageMember * member,
   int indent_level)
 {
-  (void)field_data;  // Suppress unused parameter warning
-  
   std::ostringstream oss;
   
-  // Get array size
+  using rosidl_typesupport_introspection_cpp::ROS_TYPE_BOOL;
+  using rosidl_typesupport_introspection_cpp::ROS_TYPE_BYTE;
+  using rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT8;
+  using rosidl_typesupport_introspection_cpp::ROS_TYPE_INT8;
+  using rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT16;
+  using rosidl_typesupport_introspection_cpp::ROS_TYPE_INT16;
+  using rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT32;
+  using rosidl_typesupport_introspection_cpp::ROS_TYPE_INT32;
+  using rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT64;
+  using rosidl_typesupport_introspection_cpp::ROS_TYPE_INT64;
+  using rosidl_typesupport_introspection_cpp::ROS_TYPE_FLOAT;
+  using rosidl_typesupport_introspection_cpp::ROS_TYPE_DOUBLE;
+  using rosidl_typesupport_introspection_cpp::ROS_TYPE_STRING;
+  using rosidl_typesupport_introspection_cpp::ROS_TYPE_MESSAGE;
+  
+  // Get array size and data pointer
   size_t array_size = 0;
+  const void * array_data = nullptr;
   
   if (member->array_size_ > 0 && !member->is_upper_bound_) {
     // Fixed size array
     array_size = member->array_size_;
+    array_data = field_data;
   } else {
-    // Dynamic array - size from actual data
-    array_size = 0;  // Simplified - would need proper handling
+    // Dynamic array (std::vector)
+    // For dynamic arrays, field_data points to a std::vector
+    // We need to extract size and data from the vector
+    if (member->type_id_ == ROS_TYPE_STRING) {
+      auto vec = static_cast<const std::vector<std::string> *>(field_data);
+      array_size = vec->size();
+      array_data = vec->data();
+    } else if (member->type_id_ == ROS_TYPE_MESSAGE) {
+      // For message arrays, just show count
+      oss << indent(indent_level) << "[Message array - display not implemented]\n";
+      return oss.str();
+    } else {
+      // For primitive type vectors
+      switch (member->type_id_) {
+        case ROS_TYPE_UINT8:
+        case ROS_TYPE_BYTE: {
+          auto vec = static_cast<const std::vector<uint8_t> *>(field_data);
+          array_size = vec->size();
+          array_data = vec->data();
+          break;
+        }
+        case ROS_TYPE_INT8: {
+          auto vec = static_cast<const std::vector<int8_t> *>(field_data);
+          array_size = vec->size();
+          array_data = vec->data();
+          break;
+        }
+        case ROS_TYPE_UINT16: {
+          auto vec = static_cast<const std::vector<uint16_t> *>(field_data);
+          array_size = vec->size();
+          array_data = vec->data();
+          break;
+        }
+        case ROS_TYPE_INT16: {
+          auto vec = static_cast<const std::vector<int16_t> *>(field_data);
+          array_size = vec->size();
+          array_data = vec->data();
+          break;
+        }
+        case ROS_TYPE_UINT32: {
+          auto vec = static_cast<const std::vector<uint32_t> *>(field_data);
+          array_size = vec->size();
+          array_data = vec->data();
+          break;
+        }
+        case ROS_TYPE_INT32: {
+          auto vec = static_cast<const std::vector<int32_t> *>(field_data);
+          array_size = vec->size();
+          array_data = vec->data();
+          break;
+        }
+        case ROS_TYPE_UINT64: {
+          auto vec = static_cast<const std::vector<uint64_t> *>(field_data);
+          array_size = vec->size();
+          array_data = vec->data();
+          break;
+        }
+        case ROS_TYPE_INT64: {
+          auto vec = static_cast<const std::vector<int64_t> *>(field_data);
+          array_size = vec->size();
+          array_data = vec->data();
+          break;
+        }
+        case ROS_TYPE_FLOAT: {
+          auto vec = static_cast<const std::vector<float> *>(field_data);
+          array_size = vec->size();
+          array_data = vec->data();
+          break;
+        }
+        case ROS_TYPE_DOUBLE: {
+          auto vec = static_cast<const std::vector<double> *>(field_data);
+          array_size = vec->size();
+          array_data = vec->data();
+          break;
+        }
+        default:
+          oss << indent(indent_level) << "[Unknown array type]\n";
+          return oss.str();
+      }
+    }
   }
   
-  oss << indent(indent_level) << "[Array of " << array_size << " elements]\n";
+  // Display array elements (limit to first 10 for readability)
+  size_t max_display = std::min(array_size, static_cast<size_t>(10));
+  
+  if (member->type_id_ == ROS_TYPE_STRING) {
+    const std::string * str_array = static_cast<const std::string *>(array_data);
+    for (size_t i = 0; i < max_display; ++i) {
+      oss << indent(indent_level) << "[" << i << "]: \"" << str_array[i] << "\"\n";
+    }
+  } else {
+    // Format primitive types inline if small array
+    if (array_size <= 5) {
+      oss << indent(indent_level) << "[";
+      for (size_t i = 0; i < array_size; ++i) {
+        if (i > 0) oss << ", ";
+        switch (member->type_id_) {
+          case ROS_TYPE_UINT8:
+          case ROS_TYPE_BYTE:
+            oss << static_cast<int>(static_cast<const uint8_t *>(array_data)[i]);
+            break;
+          case ROS_TYPE_INT8:
+            oss << static_cast<int>(static_cast<const int8_t *>(array_data)[i]);
+            break;
+          case ROS_TYPE_UINT16:
+            oss << static_cast<const uint16_t *>(array_data)[i];
+            break;
+          case ROS_TYPE_INT16:
+            oss << static_cast<const int16_t *>(array_data)[i];
+            break;
+          case ROS_TYPE_UINT32:
+            oss << static_cast<const uint32_t *>(array_data)[i];
+            break;
+          case ROS_TYPE_INT32:
+            oss << static_cast<const int32_t *>(array_data)[i];
+            break;
+          case ROS_TYPE_UINT64:
+            oss << static_cast<const uint64_t *>(array_data)[i];
+            break;
+          case ROS_TYPE_INT64:
+            oss << static_cast<const int64_t *>(array_data)[i];
+            break;
+          case ROS_TYPE_FLOAT:
+            oss << std::fixed << std::setprecision(3) << static_cast<const float *>(array_data)[i];
+            break;
+          case ROS_TYPE_DOUBLE:
+            oss << std::fixed << std::setprecision(3) << static_cast<const double *>(array_data)[i];
+            break;
+          default:
+            oss << "?";
+        }
+      }
+      oss << "]\n";
+    } else {
+      // Large array - show summary
+      oss << indent(indent_level) << "[Array of " << array_size << " elements";
+      if (array_size > max_display) {
+        oss << ", showing first " << max_display;
+      }
+      oss << "]\n";
+      
+      for (size_t i = 0; i < max_display; ++i) {
+        oss << indent(indent_level + 1) << "[" << i << "]: ";
+        switch (member->type_id_) {
+          case ROS_TYPE_UINT8:
+          case ROS_TYPE_BYTE:
+            oss << static_cast<int>(static_cast<const uint8_t *>(array_data)[i]);
+            break;
+          case ROS_TYPE_INT8:
+            oss << static_cast<int>(static_cast<const int8_t *>(array_data)[i]);
+            break;
+          case ROS_TYPE_UINT16:
+            oss << static_cast<const uint16_t *>(array_data)[i];
+            break;
+          case ROS_TYPE_INT16:
+            oss << static_cast<const int16_t *>(array_data)[i];
+            break;
+          case ROS_TYPE_UINT32:
+            oss << static_cast<const uint32_t *>(array_data)[i];
+            break;
+          case ROS_TYPE_INT32:
+            oss << static_cast<const int32_t *>(array_data)[i];
+            break;
+          case ROS_TYPE_UINT64:
+            oss << static_cast<const uint64_t *>(array_data)[i];
+            break;
+          case ROS_TYPE_INT64:
+            oss << static_cast<const int64_t *>(array_data)[i];
+            break;
+          case ROS_TYPE_FLOAT:
+            oss << std::fixed << std::setprecision(6) << static_cast<const float *>(array_data)[i];
+            break;
+          case ROS_TYPE_DOUBLE:
+            oss << std::fixed << std::setprecision(6) << static_cast<const double *>(array_data)[i];
+            break;
+          default:
+            oss << "<unknown>";
+        }
+        oss << "\n";
+      }
+      
+      if (array_size > max_display) {
+        oss << indent(indent_level + 1) << "... (" << (array_size - max_display) << " more elements)\n";
+      }
+    }
+  }
   
   return oss.str();
 }
@@ -394,17 +590,36 @@ std::string MessageTypeLoader::formatFieldName(
 
 bool MessageTypeLoader::isKeyField(const std::string & field_name) const
 {
-  // List of important field names
+  // List of important field names (exact match or specific patterns)
   static const std::vector<std::string> key_fields = {
     "header", "stamp", "timestamp", "frame_id", 
-    "id", "seq", "time", "name"
+    "seq", "time"
+  };
+  
+  // Fields that end with specific suffixes
+  static const std::vector<std::string> key_suffixes = {
+    "_id", "_name", "_time", "_stamp"
   };
   
   std::string lower_name = field_name;
   std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(), ::tolower);
   
+  // Exact match for common key fields
   for (const auto & key : key_fields) {
-    if (lower_name.find(key) != std::string::npos) {
+    if (lower_name == key) {
+      return true;
+    }
+  }
+  
+  // Exact match for standalone "id" or "name"
+  if (lower_name == "id" || lower_name == "name") {
+    return true;
+  }
+  
+  // Check for fields ending with key suffixes
+  for (const auto & suffix : key_suffixes) {
+    if (lower_name.size() >= suffix.size() && 
+        lower_name.substr(lower_name.size() - suffix.size()) == suffix) {
       return true;
     }
   }
