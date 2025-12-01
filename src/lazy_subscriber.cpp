@@ -3,6 +3,60 @@
 namespace ros2_topic_monitor
 {
 
+rclcpp::QoS LazySubscriber::getAdaptiveQoS(const std::string & topic_name)
+{
+  // Get information about existing publishers on this topic
+  auto publishers_info = node_->get_publishers_info_by_topic(topic_name);
+  
+  // Default QoS settings (compatible with most scenarios)
+  rclcpp::QoS qos_profile(10);
+  
+  if (publishers_info.empty()) {
+    // No publishers yet, use a permissive default
+    RCLCPP_WARN(
+      node_->get_logger(),
+      "No publishers found for topic '%s', using default QoS with BEST_EFFORT reliability",
+      topic_name.c_str()
+    );
+    qos_profile.reliability(RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT);
+    qos_profile.durability(RMW_QOS_POLICY_DURABILITY_VOLATILE);
+    qos_profile.history(RMW_QOS_POLICY_HISTORY_KEEP_LAST);
+    return qos_profile;
+  }
+  
+  // Adapt to the first publisher's QoS settings
+  const auto & pub_qos = publishers_info[0].qos_profile();
+  
+  // Match reliability policy
+  qos_profile.reliability(pub_qos.reliability());
+  
+  // Match durability policy
+  qos_profile.durability(pub_qos.durability());
+  
+  // Match history policy
+  if (pub_qos.history() == rclcpp::HistoryPolicy::KeepLast) {
+    qos_profile.keep_last(pub_qos.depth());
+  } else {
+    qos_profile.keep_all();
+  }
+  
+  // Match liveliness policy
+  qos_profile.liveliness(pub_qos.liveliness());
+  
+  // For deadline and lifespan, use the publisher's settings
+  qos_profile.deadline(pub_qos.deadline());
+  qos_profile.lifespan(pub_qos.lifespan());
+  
+  RCLCPP_INFO(
+    node_->get_logger(),
+    "Adapted QoS from %zu publisher(s) on topic '%s'",
+    publishers_info.size(),
+    topic_name.c_str()
+  );
+  
+  return qos_profile;
+}
+
 LazySubscriber::LazySubscriber(
   rclcpp::Node::SharedPtr node,
   const std::string & topic_name,
@@ -14,15 +68,27 @@ LazySubscriber::LazySubscriber(
   metrics_ = std::make_shared<MetricsManager>();
   type_loader_ = std::make_shared<MessageTypeLoader>();
   
-  // Create generic subscription
+  // Create generic subscription with dynamic QoS
   auto callback = [this](std::shared_ptr<rclcpp::SerializedMessage> msg) {
     this->messageCallback(msg);
   };
   
+  // Get dynamic QoS profile based on existing publishers
+  rclcpp::QoS qos_profile = getAdaptiveQoS(topic_name_);
+  
+  RCLCPP_INFO(
+    node_->get_logger(),
+    "Creating subscription for topic '%s' with QoS: reliability=%s, durability=%s, history=%s",
+    topic_name_.c_str(),
+    qos_profile.get_rmw_qos_profile().reliability == RMW_QOS_POLICY_RELIABILITY_RELIABLE ? "RELIABLE" : "BEST_EFFORT",
+    qos_profile.get_rmw_qos_profile().durability == RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL ? "TRANSIENT_LOCAL" : "VOLATILE",
+    qos_profile.get_rmw_qos_profile().history == RMW_QOS_POLICY_HISTORY_KEEP_LAST ? "KEEP_LAST" : "KEEP_ALL"
+  );
+  
   subscription_ = node_->create_generic_subscription(
     topic_name_,
     topic_type_,
-    rclcpp::QoS(10),
+    qos_profile,
     callback
   );
 }
@@ -56,20 +122,32 @@ std::string LazySubscriber::getLastMessageContent() const
   return last_message_content_;
 }
 
+void LazySubscriber::toggleArrayExpansion()
+{
+  bool current = expand_arrays_.load(std::memory_order_relaxed);
+  expand_arrays_.store(!current, std::memory_order_relaxed);
+}
+
+bool LazySubscriber::isArrayExpansionEnabled() const
+{
+  return expand_arrays_.load(std::memory_order_relaxed);
+}
+
 void LazySubscriber::messageCallback(std::shared_ptr<rclcpp::SerializedMessage> msg)
 {
   // Extract timestamp
   rclcpp::Time msg_time = extractTimestamp(msg);
   
-  // Update metrics (always)
+  // Update metrics (always) - this is lightweight
   metrics_->updateMetrics(msg, msg_time);
   
-  // Parse message content only in detail mode
+
   if (detail_mode_enabled_.load(std::memory_order_relaxed)) {
-    std::string content = type_loader_->prettyPrint(msg, topic_type_);
+    bool expand = expand_arrays_.load(std::memory_order_relaxed);
+    std::string content = type_loader_->prettyPrint(msg, topic_type_, expand);
     
-    std::lock_guard<std::mutex> lock(content_mutex_);
-    last_message_content_ = content;
+    std::lock_guard<std::mutex> content_lock(content_mutex_);
+    last_message_content_ = std::move(content);
   }
 }
 

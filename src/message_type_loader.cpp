@@ -15,7 +15,8 @@ namespace ros2_topic_monitor
 
 std::string MessageTypeLoader::prettyPrint(
   const std::shared_ptr<rclcpp::SerializedMessage> & serialized_msg,
-  const std::string & type_name)
+  const std::string & type_name,
+  bool expand_arrays)
 {
   if (!serialized_msg) {
     return "[No message data]";
@@ -59,7 +60,7 @@ std::string MessageTypeLoader::prettyPrint(
           serializer.deserialize_message(serialized_msg.get(), message_data);
           
           // Parse the deserialized message
-          std::string parsed = parseMessage(message_data, members, 0);
+          std::string parsed = parseMessage(message_data, members, 0, expand_arrays);
           oss << parsed;
           
         } catch (const std::exception & e) {
@@ -249,7 +250,8 @@ const rosidl_message_type_support_t * MessageTypeLoader::getTypeFromLibrary(
 std::string MessageTypeLoader::parseMessage(
   const void * message_data,
   const rosidl_typesupport_introspection_cpp::MessageMembers * members,
-  int indent_level)
+  int indent_level,
+  bool expand_arrays)
 {
   if (!message_data || !members) {
     return "";
@@ -261,7 +263,7 @@ std::string MessageTypeLoader::parseMessage(
     const auto & member = members->members_[i];
     const uint8_t * field_ptr = static_cast<const uint8_t *>(message_data) + member.offset_;
     
-    std::string field_output = parseField(field_ptr, &member, indent_level);
+    std::string field_output = parseField(field_ptr, &member, indent_level, expand_arrays);
     oss << field_output;
   }
   
@@ -271,7 +273,8 @@ std::string MessageTypeLoader::parseMessage(
 std::string MessageTypeLoader::parseField(
   const void * field_data,
   const rosidl_typesupport_introspection_cpp::MessageMember * member,
-  int indent_level)
+  int indent_level,
+  bool expand_arrays)
 {
   std::ostringstream oss;
   std::string field_name(member->name_);
@@ -281,7 +284,7 @@ std::string MessageTypeLoader::parseField(
   
   // Handle arrays
   if (member->is_array_) {
-    oss << "\n" << parseArrayField(field_data, member, indent_level + 1);
+    oss << "\n" << parseArrayField(field_data, member, indent_level + 1, expand_arrays);
     return oss.str();
   }
   
@@ -344,7 +347,7 @@ std::string MessageTypeLoader::parseField(
         oss << "\n";
         auto nested_members = static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(
           member->members_->data);
-        oss << parseMessage(field_data, nested_members, indent_level + 1);
+        oss << parseMessage(field_data, nested_members, indent_level + 1, expand_arrays);
       } else {
         oss << "<nested message>\n";
       }
@@ -360,7 +363,8 @@ std::string MessageTypeLoader::parseField(
 std::string MessageTypeLoader::parseArrayField(
   const void * field_data,
   const rosidl_typesupport_introspection_cpp::MessageMember * member,
-  int indent_level)
+  int indent_level,
+  bool expand_arrays)
 {
   std::ostringstream oss;
   
@@ -471,16 +475,28 @@ std::string MessageTypeLoader::parseArrayField(
   }
   
   // Display array elements (limit to first 10 for readability)
-  size_t max_display = std::min(array_size, static_cast<size_t>(10));
+  size_t max_display = expand_arrays ? 
+    std::min(array_size, static_cast<size_t>(1000)) : 
+    std::min(array_size, static_cast<size_t>(5));
+  
+  // Show collapse/expand hint for arrays larger than 5 elements
+  bool show_hint = !expand_arrays && array_size > 5;
   
   if (member->type_id_ == ROS_TYPE_STRING) {
     const std::string * str_array = static_cast<const std::string *>(array_data);
     for (size_t i = 0; i < max_display; ++i) {
       oss << indent(indent_level) << "[" << i << "]: \"" << str_array[i] << "\"\n";
     }
+    if (array_size > max_display) {
+      oss << indent(indent_level) << "... (" << (array_size - max_display) << " more elements";
+      if (show_hint) {
+        oss << " - Press 'E' to expand";
+      }
+      oss << ")\n";
+    }
   } else {
-    // Format primitive types inline if small array
-    if (array_size <= 5) {
+    // Format primitive types inline if small array (3 or fewer elements)
+    if (array_size <= 3) {
       oss << indent(indent_level) << "[";
       for (size_t i = 0; i < array_size; ++i) {
         if (i > 0) oss << ", ";
@@ -526,6 +542,9 @@ std::string MessageTypeLoader::parseArrayField(
       oss << indent(indent_level) << "[Array of " << array_size << " elements";
       if (array_size > max_display) {
         oss << ", showing first " << max_display;
+        if (show_hint) {
+          oss << " - Press 'E' to expand all";
+        }
       }
       oss << "]\n";
       
@@ -570,7 +589,11 @@ std::string MessageTypeLoader::parseArrayField(
       }
       
       if (array_size > max_display) {
-        oss << indent(indent_level + 1) << "... (" << (array_size - max_display) << " more elements)\n";
+        oss << indent(indent_level + 1) << "... (" << (array_size - max_display) << " more elements";
+        if (show_hint) {
+          oss << " - Press 'E' to expand";
+        }
+        oss << ")\n";
       }
     }
   }

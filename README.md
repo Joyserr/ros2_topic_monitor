@@ -1,8 +1,10 @@
 # ROS2 Topic Monitor
 
-[中文](README_CN.md)
+[English](#english) | [中文](README_CN.md)
 
 ---
+
+## English
 
 A high-performance ROS2 topic monitoring tool with an interactive ncurses TUI interface, featuring structured message parsing and real-time metrics visualization.
 
@@ -65,7 +67,9 @@ ros2 run ros2_topic_monitor monitor
 
 - **Q**: Return to main view
 - **D**: Toggle message content parsing (enable/disable structured display)
+- **A**: Toggle array expansion (show all elements vs. first 10)
 - **↑/↓**: Scroll message content
+- **PgUp/PgDn**: Fast scroll (10 lines at a time)
 
 ### 📊 Display Information
 
@@ -110,15 +114,19 @@ Shows comprehensive information for selected topic:
 4. **Message Content** (row 16+):
    - **Structured Format** (when parsing enabled):
      - Hierarchical display of all message fields
-     - Nested messages with proper indentation
-     - Arrays displayed inline (small) or per-element (large)
-     - Key fields highlighted with [*] marker
+     - Nested messages with proper indentation (2 spaces per level)
+     - Arrays displayed inline (≤5 elements) or per-element (>5 elements)
+     - Array expansion toggle: show first 10 or all elements
+     - Key fields highlighted with [*] marker (exact match or suffix patterns)
      - String fields shown in quotes
-     - Numeric precision: 6 decimals for float/double
+     - Numeric precision: 6 decimals for float/double, 3 for inline arrays
+     - Dynamic library loading for type support
+     - Full CDR deserialization with introspection API
    
    - **Raw Format** (fallback when parsing fails):
      - Hexadecimal dump of raw message data
      - Limited to first 1KB for readability
+     - Auto-fallback when type library not found
 
 ### 🎯 Supported Message Types
 
@@ -140,9 +148,17 @@ The tool uses ROS2's introspection API to dynamically parse messages, supporting
 #### 📝 Message Field Types Supported
 - **Primitives**: bool, byte, int8/16/32/64, uint8/16/32/64, float32, float64
 - **Strings**: std::string with proper quoting
-- **Arrays**: Fixed-size and dynamic (std::vector)
-- **Nested Messages**: Recursive parsing with indentation
-- **Key Field Highlighting**: header, stamp, frame_id, id, timestamp, etc.
+- **Arrays**: 
+  - Fixed-size arrays: Direct memory access
+  - Dynamic arrays: std::vector extraction and element iteration
+  - Inline display for small arrays (≤5 elements)
+  - Per-element display for large arrays (>5 elements)
+  - Configurable expansion limit (first 10 or all)
+- **Nested Messages**: Recursive parsing with 2-space indentation
+- **Key Field Highlighting** (smart matching):
+  - Exact match: `header`, `stamp`, `timestamp`, `frame_id`, `seq`, `time`, `id`, `name`
+  - Suffix patterns: `*_id`, `*_name`, `*_time`, `*_stamp`
+  - No false positives (e.g., `width` won't match `id`)
 
 ### 🔍 Troubleshooting
 
@@ -155,9 +171,16 @@ If you see hex dump instead of structured fields:
    ros2 pkg list | grep <package_name>
    ```
 
-2. **Verify library path** (libraries should be in standard ROS2 install paths)
+2. **Verify library path** (libraries should be in standard ROS2 install paths):
+   - `/opt/ros/humble/lib/lib<package>__rosidl_typesupport_*.so`
+   - The tool tries multiple library variants automatically
 
-3. **Enable detail mode**: Press 'D' in detail view
+3. **Enable detail mode**: Press 'D' in detail view to toggle parsing
+
+4. **Check library loading**:
+   - Tool attempts `rosidl_typesupport_cpp`, `rosidl_typesupport_c`, and `rosidl_typesupport_introspection_cpp`
+   - Uses `dlopen`/`dlsym` for dynamic loading
+   - Falls back to raw hex dump if all attempts fail
 
 #### ncurses Display Issues
 
@@ -187,6 +210,20 @@ sudo apt-get install ros-humble-geometry-msgs  # If not already installed
 - Ensure you're in main view (not detail view)
 - Press '/' to activate search mode
 - Search is case-insensitive and matches partial strings
+- Use Backspace to delete characters
+- Press Enter to confirm search, ESC to cancel
+
+#### Array Display Issues
+
+- Press 'A' in detail view to toggle between showing first 10 or all elements
+- Small arrays (≤5 elements) display inline automatically
+- Large arrays show per-element with index numbers
+
+#### Field Alignment Issues
+
+- Key fields are marked with `[*]` prefix
+- Smart matching prevents false positives (e.g., `width` vs `id`)
+- All fields use consistent 2-space indentation per nesting level
 
 ### 📝 License
 

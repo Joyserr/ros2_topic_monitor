@@ -24,26 +24,30 @@ public:
   // Pretty print a serialized message with structure parsing
   std::string prettyPrint(
     const std::shared_ptr<rclcpp::SerializedMessage> & serialized_msg,
-    const std::string & type_name);
+    const std::string & type_name,
+    bool expand_arrays = false);
 
 private:
   // Parse message using introspection
   std::string parseMessage(
     const void * message_data,
     const rosidl_typesupport_introspection_cpp::MessageMembers * members,
-    int indent_level = 0);
+    int indent_level,
+    bool expand_arrays);
   
   // Parse a single field
   std::string parseField(
     const void * field_data,
     const rosidl_typesupport_introspection_cpp::MessageMember * member,
-    int indent_level);
+    int indent_level,
+    bool expand_arrays);
   
   // Parse array field
   std::string parseArrayField(
     const void * field_data,
     const rosidl_typesupport_introspection_cpp::MessageMember * member,
-    int indent_level);
+    int indent_level,
+    bool expand_arrays);
   
   // Format field name with highlighting for important fields
   std::string formatFieldName(

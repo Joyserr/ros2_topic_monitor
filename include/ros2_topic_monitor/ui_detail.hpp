@@ -25,19 +25,29 @@ public:
 
   // Get user input (non-blocking)
   int getInput();
+  
+  // Scroll control
+  void scrollUp();
+  void scrollDown();
+  void resetScroll();
+  
+  // Line selection control for message content
+  void selectPrevLine();
+  void selectNextLine();
+  int getSelectedLine() const { return selected_line_; }
 
 private:
   void drawHeader(const std::string & topic_name);
   void drawMetrics(std::shared_ptr<MetricsManager> metrics);
   void drawQoS(const TopicInfo & topic_info);
   void drawMessageContent(const std::string & content);
-  void drawSparkline(const std::vector<double> & data, int row, int col, int width);
   
   int max_rows_;
   int max_cols_;
   int scroll_offset_;
-  
-  std::vector<double> fps_history_;
+  int total_content_lines_;  // Total lines in current message content
+  int max_visible_lines_;    // Maximum visible lines in content area
+  int selected_line_;        // Currently selected line in message content (-1 = no selection)
 };
 
 }  // namespace ros2_topic_monitor

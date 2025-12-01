@@ -38,10 +38,19 @@ public:
   // Get last message content (only available in detail mode)
   std::string getLastMessageContent() const;
 
+  // Toggle array expansion in detail mode
+  void toggleArrayExpansion();
+  
+  // Check if array expansion is enabled
+  bool isArrayExpansionEnabled() const;
+
 private:
   void messageCallback(std::shared_ptr<rclcpp::SerializedMessage> msg);
   
   rclcpp::Time extractTimestamp(const std::shared_ptr<rclcpp::SerializedMessage> & msg);
+  
+  // Get adaptive QoS profile based on existing publishers
+  rclcpp::QoS getAdaptiveQoS(const std::string & topic_name);
 
   rclcpp::Node::SharedPtr node_;
   std::string topic_name_;
@@ -52,6 +61,7 @@ private:
   std::shared_ptr<MessageTypeLoader> type_loader_;
   
   std::atomic<bool> detail_mode_enabled_{false};
+  std::atomic<bool> expand_arrays_{false};
   
   mutable std::mutex content_mutex_;
   std::string last_message_content_;

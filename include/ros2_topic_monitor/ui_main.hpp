@@ -23,6 +23,9 @@ public:
 
   // Cleanup ncurses
   void cleanup();
+  
+  // Show loading screen
+  void showLoadingScreen(const std::string & message = "Initializing...");
 
   // Render main screen
   void render(

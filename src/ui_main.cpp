@@ -19,29 +19,66 @@ UIMain::~UIMain()
 
 void UIMain::init()
 {
+  // Initialize ncurses with optimized settings to reduce flicker
   initscr();
+  
+  // Immediately configure ncurses before any output
   cbreak();
   noecho();
   keypad(stdscr, TRUE);
   nodelay(stdscr, TRUE);  // Non-blocking input
   curs_set(0);  // Hide cursor
   
-  // Enable colors
+  // Enable colors before first draw
   if (has_colors()) {
     start_color();
-    init_pair(1, COLOR_CYAN, COLOR_BLACK);
-    init_pair(2, COLOR_GREEN, COLOR_BLACK);
-    init_pair(3, COLOR_YELLOW, COLOR_BLACK);
-    init_pair(4, COLOR_RED, COLOR_BLACK);
+    use_default_colors();  // Use terminal default colors for transparency
+    init_pair(1, COLOR_CYAN, -1);
+    init_pair(2, COLOR_GREEN, -1);
+    init_pair(3, COLOR_YELLOW, -1);
+    init_pair(4, COLOR_RED, -1);
     init_pair(5, COLOR_WHITE, COLOR_BLUE);
+    init_pair(6, COLOR_BLACK, COLOR_CYAN);  // Selected row background
   }
   
   getmaxyx(stdscr, max_rows_, max_cols_);
+  
+  // Single clear and refresh - no intermediate displays
+  clear();
+  refresh();
 }
 
 void UIMain::cleanup()
 {
   endwin();
+}
+
+void UIMain::showLoadingScreen(const std::string & message)
+{
+  clear();
+  
+  int msg_row = max_rows_ / 2;
+  int msg_col = (max_cols_ - message.length()) / 2;
+  
+  // Draw a simple box around the message
+  attron(COLOR_PAIR(5) | A_BOLD);
+  
+  // Top border
+  mvhline(msg_row - 1, msg_col - 2, ' ', message.length() + 4);
+  
+  // Message line with border
+  mvaddch(msg_row, msg_col - 2, ' ');
+  mvaddch(msg_row, msg_col - 1, ' ');
+  mvprintw(msg_row, msg_col, "%s", message.c_str());
+  mvaddch(msg_row, msg_col + message.length(), ' ');
+  mvaddch(msg_row, msg_col + message.length() + 1, ' ');
+  
+  // Bottom border
+  mvhline(msg_row + 1, msg_col - 2, ' ', message.length() + 4);
+  
+  attroff(COLOR_PAIR(5) | A_BOLD);
+  
+  refresh();
 }
 
 void UIMain::render(
@@ -74,7 +111,7 @@ void UIMain::render(
     mvprintw(max_rows_ - 1, 2, "[ESC] Exit Search  [ENTER] Confirm");
   } else {
     std::ostringstream footer;
-    footer << "[↑/↓] Navigate  [PgUp/PgDn] Page  [ENTER] Details  [/] Search  [Q] Quit";
+    footer << "[↑/↓] Navigate  [Home/End] First/Last  [PgUp/PgDn] Page  [ENTER] Details  [/] Search  [Q] Quit";
     mvprintw(max_rows_ - 1, 2, "%s", footer.str().c_str());
     
     // Show pagination info on the right
@@ -129,6 +166,14 @@ void UIMain::drawTopicList(
   int start_row = 4;
   int max_visible = max_rows_ - 6;  // Leave room for header and footer
   
+  // Handle empty topic list
+  if (topics.empty()) {
+    attron(COLOR_PAIR(3));
+    mvprintw(start_row + 2, max_cols_ / 2 - 15, "No topics discovered yet...");
+    attroff(COLOR_PAIR(3));
+    return;
+  }
+  
   // Calculate visible range based on page_offset
   size_t display_start = page_offset_;
   size_t display_end = std::min(display_start + max_visible, topics.size());
@@ -137,9 +182,9 @@ void UIMain::drawTopicList(
     const auto & topic = topics[i];
     int row = start_row + (i - display_start);
     
-    // Highlight selected row
+    // Highlight selected row with custom color
     if (static_cast<int>(i) == selected_index) {
-      attron(A_REVERSE);
+      attron(COLOR_PAIR(6) | A_BOLD);
     }
     
     // Get subscriber info
@@ -187,7 +232,7 @@ void UIMain::drawTopicList(
     }
     
     if (static_cast<int>(i) == selected_index) {
-      attroff(A_REVERSE);
+      attroff(COLOR_PAIR(6) | A_BOLD);
     }
   }
 }
