@@ -196,7 +196,6 @@ Ensure all dependencies are installed:
 
 ```bash
 sudo apt-get install libncurses5-dev libncursesw5-dev
-sudo apt-get install ros-humble-geometry-msgs  # If not already installed
 ```
 
 #### Topics Not Showing

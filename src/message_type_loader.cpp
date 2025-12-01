@@ -157,8 +157,6 @@ const rosidl_message_type_support_t * MessageTypeLoader::getTypeSupportHandle(
   }
   
   try {
-    // Parse type name: "geometry_msgs/msg/PoseStamped" -> 
-    // package: "geometry_msgs", type: "PoseStamped"
     size_t first_slash = type_name.find('/');
     size_t second_slash = type_name.find('/', first_slash + 1);
     

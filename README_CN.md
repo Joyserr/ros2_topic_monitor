@@ -201,7 +201,6 @@ export TERM=xterm-256color
 
 ```bash
 sudo apt-get install libncurses5-dev libncursesw5-dev
-sudo apt-get install ros-humble-geometry-msgs  # 如果尚未安装
 ```
 
 #### 话题不显示
